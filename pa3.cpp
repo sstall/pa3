@@ -39,6 +39,36 @@ int main(int argc, char* argv[]) {
 	//Calls the processFile function, giving the new stack to it to find all keywords, identifiers, constants, operators, delimiters, syntax errors, and depths of loops
 	vector<Stack*> results = proccessFile(file); 
 
+	cout << "Keywords: ";
+	results[0]->printStack();
+	cout << endl;
+
+	cout << "Identifier: ";
+	results[1]->printStack();
+	cout << endl;
+
+	cout << "Constant: ";
+	results[2]->printStack();
+	cout << endl;
+
+	cout << "Operators: ";
+	results[3]->printStack();
+	cout << endl;
+
+	cout << "Delimiter: ";
+	results[4]->printStack();
+	cout << endl;
+
+	cout << endl;
+	cout << "Syntax error(s): "; 
+	if(results[5]->isEmpty()) {
+		cout << "NA";
+	}
+	else {
+		results[5]->printStack();
+	}
+	cout << endl;
+
 	return 0;
 }
 
@@ -54,6 +84,9 @@ std::vector<Stack*> proccessFile(Stack file) {
 
 	string process;
 	int maxNest = 0;
+	int nest = 0;
+	int openP = 0;
+	int closeP = 0;
 
 	while(!file.isEmpty()) {
 
@@ -64,8 +97,6 @@ std::vector<Stack*> proccessFile(Stack file) {
 
 			char c = temp.at(i);
 			string s(1,c);
-			int openP = 0;
-			int closeP = 0;
 
 			if(s == ";" || s == ",") {
 
@@ -111,7 +142,7 @@ std::vector<Stack*> proccessFile(Stack file) {
 							process = process.substr(0,i) + " " + process.substr(i + 1);
 						}
 					}
-					else {
+					else { 
 						addToContainer(identifiers, s);
 						process = process.substr(0,i) + " " + process.substr(i + 1);
 					}
@@ -146,81 +177,112 @@ std::vector<Stack*> proccessFile(Stack file) {
 		}
 		array.push_back(process.substr(pos));
 
-		int countF = 0;
-		int countB = 0;
-		int countE = 0;
 
+		//Checks for keywords and keeps track of the depth of nested loops
 		for(unsigned int i = 0; i < array.size(); i++) {
 
 			if(array[i].length() == 0) {
 				array[i].erase();
 				continue;
 			}
+
 			if(array[i] == "FOR" || array[i] == "BEGIN" || array[i] == "END") {
 				if(array[i] == "FOR") {
 					loop.push(array[i]);
 					addToContainer(keywords, array[i]);
-					countF++;
-					continue;
+					nest++;
 				}
 				else if(array[i] == "BEGIN") {
+					loop.push(array[i]);
 					addToContainer(keywords, array[i]);
-					countB++;
-					continue;
 				}
 				else if(array[i] == "END") {
-					loop.pop();
+					if(!loop.isEmpty()) {
+						string s1 = loop.pop();
+						if(!loop.isEmpty() && s1 == "BEGIN") {
+							string s2 = loop.pop();
+							if(s2 == "FOR") {
+								if(nest > maxNest) {
+									maxNest = nest;
+									nest--;
+								}
+								nest--;
+							}
+							else if(!loop.isEmpty()) {
+								loop.pop();
+								nest--;
+							}	
+							else {
+								nest--;
+							}						
+						}
+						else if(!loop.isEmpty()) {
+							loop.pop();
+							nest--;
+						}
+						else {
+							nest--;
+						}
+
+					}
+					else {
+						addToContainer(syntaxErr, "END");
+					}
 					addToContainer(keywords, array[i]);
-					countE++;
-					continue;
 				}
+
+				continue;
+
 			}
 
-			bool integer = false;
+			//Tests if the word is a constant
 			try {
 				if(stoi(array[i], nullptr, 0) != -1) {
 					addToContainer(constants, array[i]);
-					integer = true;
 					continue;
 				}				
 			} catch(invalid_argument e) {
 
 			}
 
-
-			if(isupper(array[i].at(0)) == 0 && !integer) {
+			//Checks if the word is an operator
+			if(isupper(array[i].at(0)) == 0) {
 				addToContainer(operators, array[i]);
 				continue;
 			}
 
-			addToContainer(syntaxErr, array[i]);
+			if(isupper(array[i].at(0)) != 0) {
+				nest--;
+				if(nest > maxNest) {
+					maxNest = nest;
+				}
+			}
 
-			// cout << array[i] << " " << endl;
+			//Puts the word into the syntax error list if it fell through every other test
+			addToContainer(syntaxErr, array[i]);
 
 		}		
 
 	}
 
-	cout << "identifiers: ";
-	identifiers->printStack();
-	cout << endl;
-	cout << "keywords: ";
-	keywords->printStack();
-	cout << endl;
-	cout << "operators: ";
-	operators->printStack();
-	cout << endl;
-	cout << "constants: ";
-	constants->printStack();
-	cout << endl;
-	cout << "syntax errors: "; 
-	syntaxErr->printStack();
-	cout << endl;
-	cout << "delimiters: ";
-	delimiters->printStack();
-	cout << endl;
+	if(!loop.isEmpty()) {
+		addToContainer(syntaxErr, "END");
+	}
 
-	return vector<Stack*> {keywords, identifiers, constants, operators, delimiters, syntaxErr};
+	if(openP != closeP) {
+		if(openP > closeP) {
+			addToContainer(syntaxErr, "(");
+		}
+		else if(openP < closeP) {
+			addToContainer(syntaxErr, ")");
+		}
+	}
+
+
+	cout << "The depth of nested loop(s) is " << maxNest << endl << endl;
+ 
+
+	return vector<Stack*> {keywords, operators, constants, identifiers, delimiters, syntaxErr};
 }
 
 //Attempts to read a file given the file name, and then pushes all contents of the file to a stack object and then returns the stack object
